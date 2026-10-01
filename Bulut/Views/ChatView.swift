@@ -15,6 +15,8 @@ struct ChatView: View {
     @State private var isEditingSystemPrompt = false
     @State private var isShowingModelSettings = false
     @State private var editingMessage: ChatMessage?
+    /// Follow a streaming reply only while you are at the bottom, so you can scroll up and read.
+    @State private var isAtBottom = true
     @FocusState private var isComposerFocused: Bool
 
     private var isStreaming: Bool { engine.isStreaming(conversation) }
@@ -46,17 +48,28 @@ struct ChatView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomID)
+                        // iOS 17 fallback for `BottomTracking`, which measures the geometry on iOS 18+.
+                        .onAppear {
+                            if #unavailable(iOS 18) { isAtBottom = true }
+                        }
+                        .onDisappear {
+                            if #unavailable(iOS 18) { isAtBottom = false }
+                        }
                 }
                 .padding(.horizontal)
                 .padding(.top, 12)
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
+            .modifier(BottomTracking(isAtBottom: $isAtBottom))
+            .modifier(MessageScrollFeatures())
             .onChange(of: messages.count) {
+                // A new message (yours or the start of a reply) always brings you down.
                 withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
             }
-            .onChange(of: messages.last?.content.count) {
-                if isStreaming { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+            // utf8.count is O(1) for native strings; this runs on every 50 ms flush.
+            .onChange(of: messages.last?.content.utf8.count) {
+                if isStreaming && isAtBottom { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -75,7 +88,11 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) { modelMenu }
-            ToolbarItem(placement: .topBarTrailing) { moreMenu }
+            if #available(iOS 27, *) {
+                ToolbarOverflowMenu { moreMenuItems }
+            } else {
+                ToolbarItem(placement: .topBarTrailing) { moreMenu }
+            }
         }
         .sheet(isPresented: $isEditingSystemPrompt) {
             SystemPromptSheet(prompt: $conversation.systemPrompt)
@@ -161,45 +178,60 @@ struct ChatView: View {
         .disabled(isStreaming)
     }
 
+    /// Before iOS 27 the same items live in an explicit "…" menu.
     private var moreMenu: some View {
         Menu {
-            Button {
-                isShowingModelSettings = true
-            } label: {
-                Label("Model ayarları", systemImage: "slider.horizontal.3")
-            }
-            Menu {
-                ForEach(personas) { persona in
-                    Button {
-                        conversation.systemPrompt = persona.systemPrompt
-                    } label: {
-                        if conversation.systemPrompt == persona.systemPrompt {
-                            Label(persona.name, systemImage: "checkmark")
-                        } else {
-                            Text(persona.name)
-                        }
+            moreMenuItems
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("Diğer")
+    }
+
+    @ViewBuilder
+    private var moreMenuItems: some View {
+        Button {
+            isShowingModelSettings = true
+        } label: {
+            Label("Model ayarları", systemImage: "slider.horizontal.3")
+        }
+        Menu {
+            ForEach(personas) { persona in
+                Button {
+                    conversation.systemPrompt = persona.systemPrompt
+                } label: {
+                    if conversation.systemPrompt == persona.systemPrompt {
+                        Label(persona.name, systemImage: "checkmark")
+                    } else {
+                        Text(persona.name)
                     }
                 }
-                if !conversation.systemPrompt.isEmpty {
-                    Divider()
-                    Button("Personayı kaldır", role: .destructive) {
-                        conversation.systemPrompt = ""
-                    }
+            }
+            if !conversation.systemPrompt.isEmpty {
+                Divider()
+                Button("Personayı kaldır", role: .destructive) {
+                    conversation.systemPrompt = ""
                 }
-            } label: {
-                Label("Persona", systemImage: "person.crop.rectangle.stack")
             }
-            Button {
-                isEditingSystemPrompt = true
-            } label: {
-                Label("Sistem talimatı", systemImage: "text.quote")
+        } label: {
+            Label("Persona", systemImage: "person.crop.rectangle.stack")
+        }
+        Button {
+            isEditingSystemPrompt = true
+        } label: {
+            Label("Sistem talimatı", systemImage: "text.quote")
+        }
+        if isStreaming {
+            // The body runs on every streamed flush; build the transcript only when it can be shared.
+            Button {} label: {
+                Label("Sohbeti paylaş", systemImage: "square.and.arrow.up")
             }
+            .disabled(true)
+        } else {
             ShareLink(item: conversation.transcript()) {
                 Label("Sohbeti paylaş", systemImage: "square.and.arrow.up")
             }
-            .disabled(conversation.sortedMessages.isEmpty)
-        } label: {
-            Image(systemName: "ellipsis.circle")
+            .disabled(conversation.messages?.isEmpty ?? true)
         }
     }
 
@@ -211,6 +243,38 @@ struct ChatView: View {
         draft = ""
         pendingImages = []
         engine.send(text, images: images, in: conversation, context: context)
+    }
+}
+
+/// Keeps `isAtBottom` current from the scroll geometry on iOS 18+. On iOS 17 the bottom marker's
+/// appear and disappear do the same job (see `ChatView`).
+private struct BottomTracking: ViewModifier {
+    @Binding var isAtBottom: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.visibleRect.maxY >= geometry.contentSize.height - 60
+            } action: { _, atBottom in
+                isAtBottom = atBottom
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// iOS 27 only: the navigation bar shrinks while you scroll down to read, and message rows can be
+/// swiped for their actions (`MessageRow` declares them; they have no effect before iOS 27).
+private struct MessageScrollFeatures: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27, *) {
+            content
+                .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
+                .swipeActionsContainer()
+        } else {
+            content
+        }
     }
 }
 

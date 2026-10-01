@@ -22,6 +22,31 @@ struct MessageRow: View {
                 assistantBody
             }
         }
+        // Effective on iOS 27, where ChatView marks the list as a swipe-actions container.
+        // The same actions stay in the context menu for older systems.
+        .swipeActions(edge: .leading) {
+            if !message.content.isEmpty {
+                Button {
+                    UIPasteboard.general.string = message.content
+                } label: {
+                    Label("Kopyala", systemImage: "doc.on.doc")
+                }
+                .tint(.blue)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if message.role == .user && canEdit {
+                Button(action: onEdit) {
+                    Label("Düzenle", systemImage: "pencil")
+                }
+                .tint(.orange)
+            } else if message.role == .assistant && isLast && !isStreaming {
+                Button(action: onRegenerate) {
+                    Label("Yeniden üret", systemImage: "arrow.clockwise")
+                }
+                .tint(.indigo)
+            }
+        }
         .sheet(isPresented: $isSelectingText) {
             SelectableTextSheet(text: message.content)
         }

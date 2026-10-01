@@ -93,6 +93,8 @@ struct CodeBlockView: View {
     let language: String?
     let code: String
     @State private var copied = false
+    /// Each tap restarts the "Kopyalandı" timer; the previous one is cancelled with its task.
+    @State private var copyCount = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -103,11 +105,7 @@ struct CodeBlockView: View {
                 Spacer()
                 Button {
                     UIPasteboard.general.string = code
-                    copied = true
-                    Task {
-                        try? await Task.sleep(nanoseconds: 1_500_000_000)
-                        copied = false
-                    }
+                    copyCount += 1
                 } label: {
                     Label(copied ? "Kopyalandı" : "Kopyala", systemImage: copied ? "checkmark" : "doc.on.doc")
                         .font(.caption)
@@ -127,10 +125,20 @@ struct CodeBlockView: View {
         }
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
+        .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color(.separator).opacity(0.5), lineWidth: 0.5)
-        )
+                .strokeBorder(Color(.separator).opacity(0.5), lineWidth: 0.5)
+        }
+        .task(id: copyCount) {
+            guard copyCount > 0 else { return }
+            copied = true
+            do {
+                try await Task.sleep(for: .seconds(1.5))
+            } catch {
+                return  // A newer tap took over.
+            }
+            copied = false
+        }
     }
 }
 
@@ -165,10 +173,10 @@ struct TableBlockView: View {
             }
             .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
+            .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color(.separator).opacity(0.6), lineWidth: 0.5)
-            )
+                    .strokeBorder(Color(.separator).opacity(0.6), lineWidth: 0.5)
+            }
         }
     }
 
