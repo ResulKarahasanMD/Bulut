@@ -223,3 +223,13 @@ private struct DeleteConversationConfirmation: ViewModifier {
         return isStreaming(conversation) ? base + " Süren yanıt durdurulacak." : base
     }
 }
+
+#if DEBUG
+#Preview("Sohbetler") {
+    let app = PreviewData.app()
+    ConversationListView()
+        .environment(app)
+        .environment(ChatEngine(app: app))
+        .modelContainer(PreviewData.container())
+}
+#endif

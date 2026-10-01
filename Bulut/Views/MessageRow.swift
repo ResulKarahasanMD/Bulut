@@ -294,3 +294,23 @@ struct ImageViewerSheet: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Mesaj durumları") {
+    let container = PreviewData.container()
+    ScrollView {
+        VStack(alignment: .leading, spacing: 18) {
+            MessageRow(message: PreviewData.message(.user, "Kahve nasıl demlenir?"), isStreaming: false, isLast: false)
+            MessageRow(
+                message: PreviewData.message(.assistant, PreviewData.markdownReply, thinking: "Demleme yöntemleri soruluyor."),
+                isStreaming: false,
+                isLast: false
+            )
+            MessageRow(message: PreviewData.message(.assistant, ""), isStreaming: true, isLast: false)
+            MessageRow(message: PreviewData.message(.assistant, "", error: ChatEngine.stoppedNotice), isStreaming: false, isLast: true)
+        }
+        .padding()
+    }
+    .modelContainer(container)
+}
+#endif

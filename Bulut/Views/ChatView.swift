@@ -348,3 +348,16 @@ struct EditMessageSheet: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Sohbet") {
+    let container = PreviewData.container()
+    let app = PreviewData.app()
+    NavigationStack {
+        ChatView(conversation: PreviewData.conversation(in: container))
+    }
+    .environment(app)
+    .environment(ChatEngine(app: app))
+    .modelContainer(container)
+}
+#endif

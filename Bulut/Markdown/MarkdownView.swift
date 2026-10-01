@@ -189,3 +189,12 @@ struct TableBlockView: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Markdown") {
+    ScrollView {
+        MarkdownView(text: PreviewData.markdownReply)
+            .padding()
+    }
+}
+#endif
