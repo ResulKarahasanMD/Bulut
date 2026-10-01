@@ -10,15 +10,23 @@ UI strings are Turkish.
   Bundle id `app.bulut.ollama`, `DEVELOPMENT_TEAM = 3V5WCZ8D9T` (paid account, automatic signing).
   No explicit App ID is registered; device builds use the wildcard "iOS Team Provisioning Profile: *"
   (expires 2027-07-17). TestFlight would need an explicit App ID (`-allowProvisioningUpdates`).
-- `Bulut/Networking/` — `OllamaClient` (listModels, verifyKey, streamChat NDJSON via `URLSession.bytes`),
-  `OllamaTypes`, `OllamaError` (401/403/404/429 mapping, `{"error": ...}` bodies, mid-stream errors).
-- `Bulut/Storage/KeychainStore.swift` — API key, `AfterFirstUnlockThisDeviceOnly`.
-- `Bulut/Models/Conversation.swift` — SwiftData `Conversation` / `ChatMessage` (optional to-many + defaults, CloudKit-ready).
-- `Bulut/App/` — `BulutApp` + `RootView`, `AppModel` (key, model list cache, default model),
-  `ChatEngine` (app-wide streaming, stop, regenerate, 50 ms flush throttle, background task).
+- `Bulut/Networking/` — `OllamaClient` (listModels, showModel, verifyKey, complete, streamChat NDJSON
+  via `URLSession.bytes`), `OllamaTypes` (`ThinkSetting` bool-or-level, `/api/show` → `ModelDetails`),
+  `OllamaError` (401/403/404/429 mapping, `{"error": ...}` bodies, mid-stream errors).
+- `Bulut/Storage/` — `KeychainStore` (API key, `AfterFirstUnlockThisDeviceOnly`), `ImagePreparer`
+  (ImageIO only: 1536 px JPEG for the model + 360 px thumbnail, EXIF orientation, no upscaling).
+- `Bulut/Models/` — SwiftData `Conversation` (per-chat think / temperature / context length),
+  `ChatMessage`, `MessageImage` (external storage), `Persona` (+ `PersonaSeeder`, 4 built-ins seeded
+  once), `ConversationTitle` (first-message title, cleaning of model-written titles). Optional
+  to-many + defaults everywhere, CloudKit-ready.
+- `Bulut/App/` — `BulutApp` + `RootView`, `AppModel` (key, model list cache, `/api/show` details cache),
+  `ChatEngine` (app-wide streaming, stop, regenerate, edit & resend, cancellable auto-title task,
+  50 ms flush throttle, background task).
 - `Bulut/Markdown/` — dependency-free block parser + SwiftUI renderer (headings, lists, quotes, tables, code).
-- `Bulut/Views/` — Onboarding (key verify), ConversationList, Chat, Composer, MessageRow (thinking
-  disclosure, copy, regenerate, select-text sheet), Settings.
+- `Bulut/Views/` — Onboarding (key verify), ConversationList (long-press new chat → persona), Chat
+  (model, persona, settings and edit sheets), Composer (photo picker for vision models, max 4),
+  MessageRow (thinking disclosure, copy, regenerate, edit, image grid + viewer), ModelSettingsSheet,
+  PersonaViews, Settings (personas, auto-title toggle).
 
 ## API facts verified on 2026-10-01
 - `GET /api/tags` is public: it returns 200 even with an invalid key, so the key is verified with a
@@ -44,11 +52,16 @@ UI strings are Turkish.
   0 warnings with `SWIFT_STRICT_CONCURRENCY=complete`. Installed and launched on the user's iPhone
   15 Pro Max via `xcrun devicectl` (process stayed alive).
 - Phase 1 on the iPhone: real-key onboarding, model list, reply, thinking disclosure, Markdown.
-- Phase 2 (PR #1, branch `feature/phase-2`) verified in the iOS 27 simulator "Bulut iPhone 17 Pro Max"
-  with a real key: think control (above), stop keeps partial thinking without an error, regenerate,
-  personas, edit & resend (also image-only), 2-photo attachment on kimi-k2.7-code (the model read
-  "BULUT 42" from the test image), auto title. Phase 1 → 2 SwiftData migration: rows kept, personas seeded.
-- NOT yet verified: Phase 2 upgrade on the iPhone; title language fix (needs typed input).
+- Phase 2 (PR #1, merged into `main` as `d2d298d`) verified in the iOS 27 simulator "Bulut iPhone 17
+  Pro Max" with a real key: think control (above), stop keeps partial thinking without an error,
+  regenerate, personas, edit & resend (also image-only), 2-photo attachment on kimi-k2.7-code (the
+  model read "BULUT 42" from the test image), auto title.
+- Phase 2 installed on the iPhone from `6a5e80a`: the Phase 1 store migrated in place (1 conversation,
+  6 messages; role/content/thinking identical by sha before vs after), `ZPERSONA` and `ZMESSAGEIMAGE`
+  created, 4 personas seeded, key kept. Back up first with
+  `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier app.bulut.ollama
+  --source "Library/Application Support"` (fails with CoreDeviceError 4016 while the phone is locked).
+- NOT yet verified: the title language fix (needs typed input).
 
 ## Simulator testing notes
 - The simulator pasteboard stays empty (`simctl pbcopy` and the panel's text action both fail), so text
@@ -60,5 +73,6 @@ UI strings are Turkish.
 
 ## Next
 Phase 3: App Intent / Shortcuts, share extension, Markdown/JSON export.
-Open ideas: show a stopped-while-thinking state, smaller JPEGs (a detailed 1536 px photo is ~840 KB and is
-resent with every turn), strip Markdown in the conversation list preview.
+Open ideas: a visible "stopped" label on interrupted replies, smaller JPEGs (a detailed 1536 px photo
+is ~840 KB and is resent with every turn), strip Markdown in the conversation list preview, the
+code-block edge fade kept in `stash@{0}` (based on Phase 1).
