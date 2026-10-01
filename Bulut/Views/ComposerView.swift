@@ -15,7 +15,10 @@ struct ComposerView: View {
     static let maxImages = 4
 
     @State private var pickerItems: [PhotosPickerItem] = []
-    @State private var isPreparingImages = false
+    /// One load at a time; cancelled when the model can no longer see images.
+    @State private var loadTask: Task<Void, Never>?
+
+    private var isPreparingImages: Bool { loadTask != nil }
 
     private var canSend: Bool {
         isEnabled && !isPreparingImages
@@ -39,7 +42,7 @@ struct ComposerView: View {
                             .font(.system(size: 22))
                             .frame(width: 34, height: 38)
                     }
-                    .disabled(!isEnabled || isStreaming || images.count >= Self.maxImages)
+                    .disabled(!isEnabled || isStreaming || isPreparingImages || images.count >= Self.maxImages)
                     .accessibilityLabel("Görsel ekle")
                 }
 
@@ -73,9 +76,22 @@ struct ComposerView: View {
         .background(.bar)
         .onChange(of: pickerItems) {
             let items = pickerItems
-            guard !items.isEmpty else { return }
+            guard !items.isEmpty, loadTask == nil else { return }
             pickerItems = []
-            Task { await load(items) }
+            let task = Task { await load(items) }
+            loadTask = task
+            Task {
+                await task.value
+                // A cancelled load must not clear the handle of a newer one.
+                if loadTask == task { loadTask = nil }
+            }
+        }
+        .onChange(of: canAttachImages) {
+            // Switched to a model that cannot see images: drop pending and in-flight photos.
+            guard !canAttachImages else { return }
+            loadTask?.cancel()
+            loadTask = nil
+            images = []
         }
     }
 
@@ -109,14 +125,14 @@ struct ComposerView: View {
 
     /// Loads the picked photos and downscales them off the main thread.
     private func load(_ items: [PhotosPickerItem]) async {
-        isPreparingImages = true
-        defer { isPreparingImages = false }
-        for item in items where images.count < Self.maxImages {
+        for item in items {
             guard let raw = try? await item.loadTransferable(type: Data.self) else { continue }
             let prepared = await Task.detached(priority: .userInitiated) {
                 ImagePreparer.prepare(raw)
             }.value
-            if let prepared {
+            // Re-check after each await: the load may have been cancelled or the strip filled up.
+            guard !Task.isCancelled else { return }
+            if let prepared, images.count < Self.maxImages {
                 images.append(prepared)
             }
         }

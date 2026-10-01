@@ -6,6 +6,8 @@ struct MessageRow: View {
     let isStreaming: Bool
     let isLast: Bool
     var onRegenerate: () -> Void = {}
+    /// False while the conversation is streaming; `isStreaming` only covers this row.
+    var canEdit = true
     var onEdit: () -> Void = {}
 
     @State private var isSelectingText = false
@@ -35,17 +37,7 @@ struct MessageRow: View {
             Spacer(minLength: 48)
             VStack(alignment: .trailing, spacing: 6) {
                 if message.hasImages {
-                    HStack(spacing: 6) {
-                        ForEach(message.sortedImages) { image in
-                            Button {
-                                openedImage = image
-                            } label: {
-                                ThumbnailView(data: image.thumbnail, side: 96)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Görseli aç")
-                        }
-                    }
+                    imageGrid
                 }
                 if !message.content.isEmpty {
                     Text(message.content)
@@ -53,16 +45,40 @@ struct MessageRow: View {
                         .padding(.vertical, 10)
                         .foregroundStyle(.white)
                         .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .contextMenu {
-                            copyButton
-                            selectTextButton
-                            ShareLink(item: message.content)
-                            if !isStreaming {
-                                Button(action: onEdit) {
-                                    Label("Düzenle ve yeniden gönder", systemImage: "pencil")
-                                }
-                            }
+                }
+            }
+            // On the whole message, so image-only messages can be edited too.
+            .contextMenu {
+                if !message.content.isEmpty {
+                    copyButton
+                    selectTextButton
+                    ShareLink(item: message.content)
+                }
+                if canEdit {
+                    Button(action: onEdit) {
+                        Label("Düzenle ve yeniden gönder", systemImage: "pencil")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Two thumbnails per row, so four images stay 198 pt wide on any iPhone.
+    private var imageGrid: some View {
+        let images = message.sortedImages
+        let rows = stride(from: 0, to: images.count, by: 2).map { Array(images[$0..<min($0 + 2, images.count)]) }
+        return VStack(alignment: .trailing, spacing: 6) {
+            ForEach(rows, id: \.first?.id) { row in
+                HStack(spacing: 6) {
+                    ForEach(row) { image in
+                        Button {
+                            openedImage = image
+                        } label: {
+                            ThumbnailView(data: image.thumbnail, side: 96)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Görseli aç")
+                    }
                 }
             }
         }

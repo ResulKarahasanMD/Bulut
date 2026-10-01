@@ -12,7 +12,8 @@ final class ChatEngine {
     @ObservationIgnored private let app: AppModel
     @ObservationIgnored private var tasks: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var backgroundTasks: [UUID: UIBackgroundTaskIdentifier] = [:]
-    @ObservationIgnored private var titleRequests: Set<UUID> = []
+    /// Title requests run after streaming ends, but stay cancellable through `stop` / `stopAll`.
+    @ObservationIgnored private var titleTasks: [UUID: Task<Void, Never>] = [:]
 
     /// How often streamed text is written into SwiftData (keeps the UI smooth on long answers).
     private let flushInterval: TimeInterval = 0.05
@@ -73,10 +74,12 @@ final class ChatEngine {
 
     func stop(_ conversation: Conversation) {
         tasks[conversation.id]?.cancel()
+        titleTasks[conversation.id]?.cancel()
     }
 
     func stopAll() {
         tasks.values.forEach { $0.cancel() }
+        titleTasks.values.forEach { $0.cancel() }
     }
 
     // MARK: Streaming
@@ -116,7 +119,7 @@ final class ChatEngine {
             try? context.save()
             self?.finish(id)
             if !Task.isCancelled, reply.errorText == nil, !reply.content.isEmpty {
-                await self?.generateTitleIfNeeded(for: conversation, client: client, context: context)
+                self?.startTitleIfNeeded(for: conversation, client: client, context: context)
             }
         }
     }
@@ -179,16 +182,21 @@ final class ChatEngine {
 
     /// Asks the same model for a short title after the first successful reply. Keeps the
     /// first-message title when the setting is off or the request fails.
-    private func generateTitleIfNeeded(for conversation: Conversation, client: OllamaClient, context: ModelContext) async {
+    private func startTitleIfNeeded(for conversation: Conversation, client: OllamaClient, context: ModelContext) {
         let enabled = UserDefaults.standard.object(forKey: Self.autoTitleKey) as? Bool ?? true
+        let id = conversation.id
+        guard enabled, !conversation.hasGeneratedTitle, titleTasks[id] == nil else { return }
+        titleTasks[id] = Task { [weak self] in
+            await self?.generateTitle(for: conversation, client: client, context: context)
+            self?.titleTasks[id] = nil
+        }
+    }
+
+    private func generateTitle(for conversation: Conversation, client: OllamaClient, context: ModelContext) async {
         let messages = conversation.sortedMessages
-        guard enabled, !conversation.hasGeneratedTitle, !titleRequests.contains(conversation.id),
-              let question = messages.first(where: { $0.role == .user }),
+        guard let question = messages.first(where: { $0.role == .user }),
               let answer = messages.first(where: { $0.role == .assistant && !$0.content.isEmpty && $0.errorText == nil })
         else { return }
-
-        titleRequests.insert(conversation.id)
-        defer { titleRequests.remove(conversation.id) }
 
         let model = conversation.modelName
         let questionText = question.content.isEmpty ? "(görsel gönderdi)" : String(question.content.prefix(1500))
@@ -207,7 +215,10 @@ final class ChatEngine {
                 options: OllamaChatOptions(temperature: 0.3),
                 think: app.modelDetails[model]?.lightestThink
             )
-            guard let title = ConversationTitle.clean(raw) else { return }
+            // The conversation may have been stopped or deleted while the request was out.
+            guard !Task.isCancelled, conversation.modelContext != nil, !conversation.isDeleted,
+                  let title = ConversationTitle.clean(raw)
+            else { return }
             conversation.title = title
             conversation.hasGeneratedTitle = true
             try? context.save()

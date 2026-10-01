@@ -38,6 +38,7 @@ struct ChatView: View {
                             isStreaming: isStreaming && message.id == lastID,
                             isLast: message.id == lastID,
                             onRegenerate: { engine.regenerate(in: conversation, context: context) },
+                            canEdit: !isStreaming,
                             onEdit: { editingMessage = message }
                         )
                         .id(message.id)
@@ -83,7 +84,7 @@ struct ChatView: View {
             ModelSettingsSheet(conversation: conversation, details: details)
         }
         .sheet(item: $editingMessage) { message in
-            EditMessageSheet(initialText: message.content) { text in
+            EditMessageSheet(initialText: message.content, allowsEmptyText: message.hasImages) { text in
                 engine.resend(message, as: text, in: conversation, context: context)
             }
         }
@@ -92,10 +93,6 @@ struct ChatView: View {
         }
         .task(id: conversation.modelName) {
             await app.loadDetails(for: conversation.modelName)
-        }
-        .onChange(of: canAttachImages) {
-            // Switched to a model that cannot see images.
-            if !canAttachImages { pendingImages = [] }
         }
     }
 
@@ -248,11 +245,14 @@ struct SystemPromptSheet: View {
 
 /// Edits a sent message; saving drops the replies after it and asks the model again.
 struct EditMessageSheet: View {
+    /// Image-only messages may be resent without text.
+    let allowsEmptyText: Bool
     let onResend: (String) -> Void
     @State private var text: String
     @Environment(\.dismiss) private var dismiss
 
-    init(initialText: String, onResend: @escaping (String) -> Void) {
+    init(initialText: String, allowsEmptyText: Bool = false, onResend: @escaping (String) -> Void) {
+        self.allowsEmptyText = allowsEmptyText
         self.onResend = onResend
         _text = State(initialValue: initialText)
     }
@@ -278,7 +278,7 @@ struct EditMessageSheet: View {
                         onResend(text)
                         dismiss()
                     }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!allowsEmptyText && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
