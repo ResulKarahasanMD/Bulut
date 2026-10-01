@@ -5,7 +5,7 @@ import Testing
 
 /// Drives `ChatEngine` against `StubServer`. Serialized because the stub is process-wide.
 @MainActor
-@Suite("ChatEngine", .serialized)
+@Suite("ChatEngine and AppModel", .serialized)
 final class ChatEngineTests {
     let container: ModelContainer
     let context: ModelContext
@@ -126,6 +126,18 @@ final class ChatEngineTests {
 
         #expect(await waitUntil { !engine.isStreaming(conversation) })
         #expect(reply(in: conversation)?.errorText == ChatEngine.emptyReplyNotice)
+    }
+
+    // MARK: AppModel uses the injected server everywhere
+
+    @Test func keyVerificationGoesThroughTheInjectedServer() async throws {
+        // GET /api/tags and the 1-token POST /api/chat are both non-streaming; the chat body is not read.
+        StubServer.configure(stream: .stream([]), single: .stream([#"{"models":[{"name":"gpt-oss:20b"}]}"#]))
+
+        try await app.verify(key: "new-key")
+
+        #expect(StubServer.currentLog.started == [false, false])
+        #expect(app.modelNames == ["gpt-oss:20b"])
     }
 
     // MARK: H6: background time runs out

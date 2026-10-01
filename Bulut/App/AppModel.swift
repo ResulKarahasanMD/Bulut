@@ -63,7 +63,7 @@ final class AppModel {
 
     /// Checks the key with a real authenticated request. Throws `OllamaError.unauthorized` for a bad key.
     func verify(key: String) async throws {
-        let client = OllamaClient(apiKey: key)
+        let client = OllamaClient(apiKey: key, baseURL: baseURL)
         let models = try await client.listModels()
         applyModels(models.map(\.name))
         let names = Set(modelNames)
