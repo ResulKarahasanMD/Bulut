@@ -8,6 +8,7 @@ final class AppModel {
     private enum DefaultsKey {
         static let defaultModel = "defaultModel"
         static let cachedModels = "cachedModelNames"
+        static let modelDetails = "cachedModelDetails"
     }
 
     /// Models tried first when picking a default and when checking a new key.
@@ -18,13 +19,19 @@ final class AppModel {
     private(set) var isLoadingModels = false
     private(set) var modelsError: String?
     private(set) var defaultModel: String
+    /// `/api/show` results per model name, cached across launches.
+    private(set) var modelDetails: [String: ModelDetails]
 
     @ObservationIgnored private let defaults = UserDefaults.standard
+    /// Models refreshed from the server during this launch; others are refreshed once on first use.
+    @ObservationIgnored private var detailsRefreshed: Set<String> = []
 
     init() {
         apiKey = KeychainStore.readAPIKey()
         modelNames = defaults.stringArray(forKey: DefaultsKey.cachedModels) ?? []
         defaultModel = defaults.string(forKey: DefaultsKey.defaultModel) ?? ""
+        modelDetails = defaults.data(forKey: DefaultsKey.modelDetails)
+            .flatMap { try? JSONDecoder().decode([String: ModelDetails].self, from: $0) } ?? [:]
     }
 
     var hasAPIKey: Bool { apiKey != nil }
@@ -79,6 +86,20 @@ final class AppModel {
     func setDefaultModel(_ name: String) {
         defaultModel = name
         defaults.set(name, forKey: DefaultsKey.defaultModel)
+    }
+
+    /// Makes sure `modelDetails[name]` is filled and fresh for this launch. Failures keep the cached value.
+    func loadDetails(for name: String) async {
+        guard !name.isEmpty, let client, !detailsRefreshed.contains(name) else { return }
+        detailsRefreshed.insert(name)
+        do {
+            modelDetails[name] = try await client.showModel(name)
+            if let data = try? JSONEncoder().encode(modelDetails) {
+                defaults.set(data, forKey: DefaultsKey.modelDetails)
+            }
+        } catch {
+            detailsRefreshed.remove(name)
+        }
     }
 
     private func applyModels(_ names: [String]) {

@@ -7,6 +7,7 @@ struct ConversationListView: View {
     @Environment(ChatEngine.self) private var engine
 
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
+    @Query(sort: \Persona.createdAt) private var personas: [Persona]
     @AppStorage("defaultSystemPrompt") private var defaultSystemPrompt = ""
 
     @State private var path: [Conversation] = []
@@ -65,8 +66,15 @@ struct ConversationListView: View {
                     .accessibilityLabel("Ayarlar")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: newConversation) {
+                    // Tap: new chat. Long press: new chat with a persona.
+                    Menu {
+                        ForEach(personas) { persona in
+                            Button(persona.name) { newConversation(persona: persona) }
+                        }
+                    } label: {
                         Image(systemName: "square.and.pencil")
+                    } primaryAction: {
+                        newConversation()
                     }
                     .accessibilityLabel("Yeni sohbet")
                 }
@@ -86,9 +94,13 @@ struct ConversationListView: View {
     // MARK: Actions
 
     private func newConversation() {
+        newConversation(persona: nil)
+    }
+
+    private func newConversation(persona: Persona?) {
         let conversation = Conversation(
             modelName: app.defaultModel.isEmpty ? (app.modelNames.first ?? "") : app.defaultModel,
-            systemPrompt: defaultSystemPrompt
+            systemPrompt: persona?.systemPrompt ?? defaultSystemPrompt
         )
         context.insert(conversation)
         path = [conversation]

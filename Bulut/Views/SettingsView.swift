@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(ChatEngine.self) private var engine
 
     @AppStorage("defaultSystemPrompt") private var defaultSystemPrompt = ""
+    @AppStorage(ChatEngine.autoTitleKey) private var autoTitle = true
 
     @State private var isConfirmingKeyRemoval = false
     @State private var isConfirmingDeleteAll = false
@@ -59,6 +60,19 @@ struct SettingsView: View {
                     Text("Varsayılan sistem talimatı")
                 } footer: {
                     Text("Yeni açılan her sohbete kopyalanır. Örn: “Türkçe yanıt ver, kısa ve net ol.”")
+                }
+
+                Section {
+                    NavigationLink {
+                        PersonaListView()
+                    } label: {
+                        Label("Personalar", systemImage: "person.crop.rectangle.stack")
+                    }
+                    Toggle("Başlığı model üretsin", isOn: $autoTitle)
+                } header: {
+                    Text("Sohbetler")
+                } footer: {
+                    Text("Personayı sohbet ekranındaki ••• menüsünden seçebilirsin. Başlık, ilk yanıttan sonra aynı modele kısa bir istekle yazdırılır.")
                 }
 
                 Section {
