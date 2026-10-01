@@ -1,9 +1,9 @@
 # Bulut
 
-Ollama Cloud modelleriyle konuşmak için kişisel iOS uygulaması (SwiftUI, iOS 17+).
+Ollama Cloud modelleriyle konuşmak için kişisel iOS uygulaması (SwiftUI, iOS 27+).
 
 ## Kurulum
-1. `Bulut.xcodeproj` dosyasını Xcode 16 veya üstüyle aç.
+1. `Bulut.xcodeproj` dosyasını Xcode 27 veya üstüyle aç.
 2. Bulut target → Signing & Capabilities → Team kısmından Developer hesabını seç. Gerekirse Bundle Identifier'ı değiştir.
 3. iPhone'unu seçip ▶︎ ile çalıştır.
 4. İlk açılışta ollama.com/settings/keys adresinden aldığın API anahtarını yapıştır. Anahtar tek token'lık bir istekle doğrulanır ve Anahtar Zinciri'nde saklanır.

@@ -13,6 +13,8 @@ struct ConversationListView: View {
     @State private var path: [Conversation] = []
     @State private var searchText = ""
     @State private var isShowingSettings = false
+    /// Non-nil while the delete confirmation is shown.
+    @State private var conversationToDelete: Conversation?
 
     private var filtered: [Conversation] {
         let query = searchText.trimmingCharacters(in: .whitespaces)
@@ -33,10 +35,25 @@ struct ConversationListView: View {
                             isStreaming: engine.isStreaming(conversation)
                         )
                     }
+                    // Not `.onDelete`: List removes that row at once and raises an inconsistency
+                    // exception when the data is still there (it is, until you confirm).
+                    // No destructive role either, so the row is never hidden ahead of the data.
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button {
+                            confirmDelete(conversation)
+                        } label: {
+                            Label("Sil", systemImage: "trash")
+                        }
+                        .tint(.red)
+                    }
                 }
-                .onDelete(perform: delete)
             }
             .listStyle(.plain)
+            .confirmationDialog("Sohbet silinsin mi?", item: $conversationToDelete, titleVisibility: .visible) { conversation in
+                Button("Sil", role: .destructive) { delete(conversation) }
+            } message: { conversation in
+                Text(deleteMessage(for: conversation))
+            }
             .overlay {
                 if conversations.isEmpty {
                     ContentUnavailableView {
@@ -65,30 +82,35 @@ struct ConversationListView: View {
                     }
                     .accessibilityLabel("Ayarlar")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    // Tap: new chat. Long press: new chat with a persona.
-                    Menu {
-                        ForEach(personas) { persona in
-                            Button(persona.name) { newConversation(persona: persona) }
-                        }
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    } primaryAction: {
-                        newConversation()
-                    }
-                    .accessibilityLabel("Yeni sohbet")
-                }
+                // Never moves into the overflow menu, however narrow the bar gets.
+                ToolbarItem(placement: .topBarPinnedTrailing) { newConversationMenu }
             }
             .sheet(isPresented: $isShowingSettings) {
                 SettingsView()
             }
             .task {
+                // Chats left empty when the app was closed inside them.
+                removeEmptyConversations()
                 await app.refreshModels()
             }
             .onChange(of: path) {
                 if path.isEmpty { removeEmptyConversations() }
             }
         }
+    }
+
+    /// Tap: new chat. Long press: new chat with a persona.
+    private var newConversationMenu: some View {
+        Menu {
+            ForEach(personas) { persona in
+                Button(persona.name) { newConversation(persona: persona) }
+            }
+        } label: {
+            Image(systemName: "square.and.pencil")
+        } primaryAction: {
+            newConversation()
+        }
+        .accessibilityLabel("Yeni sohbet")
     }
 
     // MARK: Actions
@@ -106,18 +128,24 @@ struct ConversationListView: View {
         path = [conversation]
     }
 
-    private func delete(at offsets: IndexSet) {
-        let items = offsets.map { filtered[$0] }
-        for conversation in items {
-            engine.stop(conversation)
-            context.delete(conversation)
-        }
-        try? context.save()
+    /// Swipe to delete asks first; a whole conversation cannot be brought back.
+    private func confirmDelete(_ conversation: Conversation) {
+        conversationToDelete = conversation
     }
 
-    /// Drops chats that were opened but never used, once you are back on the list.
+    private func deleteMessage(for conversation: Conversation) -> String {
+        let base = "“\(conversation.displayTitle)” ve tüm mesajları silinecek."
+        return engine.isStreaming(conversation) ? base + " Süren yanıt durdurulacak." : base
+    }
+
+    private func delete(_ conversation: Conversation) {
+        Task { await engine.delete([conversation], context: context) }
+    }
+
+    /// Drops chats that were opened but never used: on launch and whenever you are back on the
+    /// list. The chat that is open right now is kept.
     private func removeEmptyConversations() {
-        for conversation in conversations where (conversation.messages ?? []).isEmpty {
+        for conversation in conversations where (conversation.messages ?? []).isEmpty && !path.contains(conversation) {
             context.delete(conversation)
         }
         try? context.save()
@@ -154,3 +182,13 @@ struct ConversationRow: View {
         .padding(.vertical, 2)
     }
 }
+
+#if DEBUG
+#Preview("Sohbetler") {
+    let app = PreviewData.app()
+    ConversationListView()
+        .environment(app)
+        .environment(ChatEngine(app: app))
+        .modelContainer(PreviewData.container())
+}
+#endif

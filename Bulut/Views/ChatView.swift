@@ -15,6 +15,8 @@ struct ChatView: View {
     @State private var isEditingSystemPrompt = false
     @State private var isShowingModelSettings = false
     @State private var editingMessage: ChatMessage?
+    /// Follow a streaming reply only while you are at the bottom, so you can scroll up and read.
+    @State private var isAtBottom = true
     @FocusState private var isComposerFocused: Bool
 
     private var isStreaming: Bool { engine.isStreaming(conversation) }
@@ -52,11 +54,22 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.visibleRect.maxY >= geometry.contentSize.height - 60
+            } action: { _, atBottom in
+                isAtBottom = atBottom
+            }
+            // The bar shrinks while you scroll down to read.
+            .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
+            // Lets MessageRow's swipe actions work outside a List.
+            .swipeActionsContainer()
             .onChange(of: messages.count) {
+                // A new message (yours or the start of a reply) always brings you down.
                 withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
             }
-            .onChange(of: messages.last?.content.count) {
-                if isStreaming { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+            // utf8.count is O(1) for native strings; this runs on every 50 ms flush.
+            .onChange(of: messages.last?.content.utf8.count) {
+                if isStreaming && isAtBottom { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -75,7 +88,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) { modelMenu }
-            ToolbarItem(placement: .topBarTrailing) { moreMenu }
+            ToolbarOverflowMenu { moreMenuItems }
         }
         .sheet(isPresented: $isEditingSystemPrompt) {
             SystemPromptSheet(prompt: $conversation.systemPrompt)
@@ -161,45 +174,51 @@ struct ChatView: View {
         .disabled(isStreaming)
     }
 
-    private var moreMenu: some View {
+    /// Lives in the system overflow menu (`ToolbarOverflowMenu`).
+    @ViewBuilder
+    private var moreMenuItems: some View {
+        Button {
+            isShowingModelSettings = true
+        } label: {
+            Label("Model ayarları", systemImage: "slider.horizontal.3")
+        }
         Menu {
-            Button {
-                isShowingModelSettings = true
-            } label: {
-                Label("Model ayarları", systemImage: "slider.horizontal.3")
-            }
-            Menu {
-                ForEach(personas) { persona in
-                    Button {
-                        conversation.systemPrompt = persona.systemPrompt
-                    } label: {
-                        if conversation.systemPrompt == persona.systemPrompt {
-                            Label(persona.name, systemImage: "checkmark")
-                        } else {
-                            Text(persona.name)
-                        }
+            ForEach(personas) { persona in
+                Button {
+                    conversation.systemPrompt = persona.systemPrompt
+                } label: {
+                    if conversation.systemPrompt == persona.systemPrompt {
+                        Label(persona.name, systemImage: "checkmark")
+                    } else {
+                        Text(persona.name)
                     }
                 }
-                if !conversation.systemPrompt.isEmpty {
-                    Divider()
-                    Button("Personayı kaldır", role: .destructive) {
-                        conversation.systemPrompt = ""
-                    }
+            }
+            if !conversation.systemPrompt.isEmpty {
+                Divider()
+                Button("Personayı kaldır", role: .destructive) {
+                    conversation.systemPrompt = ""
                 }
-            } label: {
-                Label("Persona", systemImage: "person.crop.rectangle.stack")
             }
-            Button {
-                isEditingSystemPrompt = true
-            } label: {
-                Label("Sistem talimatı", systemImage: "text.quote")
+        } label: {
+            Label("Persona", systemImage: "person.crop.rectangle.stack")
+        }
+        Button {
+            isEditingSystemPrompt = true
+        } label: {
+            Label("Sistem talimatı", systemImage: "text.quote")
+        }
+        if isStreaming {
+            // The body runs on every streamed flush; build the transcript only when it can be shared.
+            Button {} label: {
+                Label("Sohbeti paylaş", systemImage: "square.and.arrow.up")
             }
+            .disabled(true)
+        } else {
             ShareLink(item: conversation.transcript()) {
                 Label("Sohbeti paylaş", systemImage: "square.and.arrow.up")
             }
-            .disabled(conversation.sortedMessages.isEmpty)
-        } label: {
-            Image(systemName: "ellipsis.circle")
+            .disabled(conversation.messages?.isEmpty ?? true)
         }
     }
 
@@ -284,3 +303,16 @@ struct EditMessageSheet: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Sohbet") {
+    let container = PreviewData.container()
+    let app = PreviewData.app()
+    NavigationStack {
+        ChatView(conversation: PreviewData.conversation(in: container))
+    }
+    .environment(app)
+    .environment(ChatEngine(app: app))
+    .modelContainer(container)
+}
+#endif

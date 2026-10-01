@@ -22,6 +22,30 @@ struct MessageRow: View {
                 assistantBody
             }
         }
+        // ChatView marks the list as a swipe-actions container; the context menu offers the same actions.
+        .swipeActions(edge: .leading) {
+            if !message.content.isEmpty {
+                Button {
+                    UIPasteboard.general.string = message.content
+                } label: {
+                    Label("Kopyala", systemImage: "doc.on.doc")
+                }
+                .tint(.blue)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if message.role == .user && canEdit {
+                Button(action: onEdit) {
+                    Label("Düzenle", systemImage: "pencil")
+                }
+                .tint(.orange)
+            } else if message.role == .assistant && isLast && !isStreaming {
+                Button(action: onRegenerate) {
+                    Label("Yeniden üret", systemImage: "arrow.clockwise")
+                }
+                .tint(.indigo)
+            }
+        }
         .sheet(isPresented: $isSelectingText) {
             SelectableTextSheet(text: message.content)
         }
@@ -269,3 +293,23 @@ struct ImageViewerSheet: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Mesaj durumları") {
+    let container = PreviewData.container()
+    ScrollView {
+        VStack(alignment: .leading, spacing: 18) {
+            MessageRow(message: PreviewData.message(.user, "Kahve nasıl demlenir?"), isStreaming: false, isLast: false)
+            MessageRow(
+                message: PreviewData.message(.assistant, PreviewData.markdownReply, thinking: "Demleme yöntemleri soruluyor."),
+                isStreaming: false,
+                isLast: false
+            )
+            MessageRow(message: PreviewData.message(.assistant, ""), isStreaming: true, isLast: false)
+            MessageRow(message: PreviewData.message(.assistant, "", error: ChatEngine.stoppedNotice), isStreaming: false, isLast: true)
+        }
+        .padding()
+    }
+    .modelContainer(container)
+}
+#endif

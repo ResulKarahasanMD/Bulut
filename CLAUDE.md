@@ -1,6 +1,6 @@
 # Bulut — personal iOS client for Ollama Cloud
 
-SwiftUI + SwiftData iOS app (iOS 17+, Swift 5 language mode) that talks **directly** to Ollama Cloud
+SwiftUI + SwiftData iOS app (iOS 27.0+, Swift 5 language mode) that talks **directly** to Ollama Cloud
 (`https://ollama.com/api`) with the user's API key. Cloud models only, no local Ollama, no backend.
 UI strings are Turkish.
 
@@ -27,6 +27,25 @@ UI strings are Turkish.
   (model, persona, settings and edit sheets), Composer (photo picker for vision models, max 4),
   MessageRow (thinking disclosure, copy, regenerate, edit, image grid + viewer), ModelSettingsSheet,
   PersonaViews, Settings (personas, auto-title toggle).
+- `Bulut/Previews/PreviewData.swift` — `#if DEBUG` in-memory store and keyless `AppModel` for `#Preview`s.
+- `BulutTests/` — Swift Testing target hosted by Bulut.app (synchronized folder; shared `Bulut` scheme
+  runs it serially). `StubServer` fakes `https://bulut.test` through `URLProtocol` on
+  `URLSession.shared`; `AppModel(apiKey:defaults:baseURL:)` points the app at it. Run:
+  `xcodebuild test -project Bulut.xcodeproj -scheme Bulut -destination 'platform=iOS Simulator,name=Bulut iPhone 17 Pro Max'`.
+
+## iOS 27 (deployment target 27.0, so no `#available` gates)
+- 27.0, not 27.0.1: the only simulator runtime here is iOS 27.0 (24A434) and the SDK allows up to
+  27.0.99; the iPhone runs 27.0.1. The iPad Pro (iOS 26.6) can no longer install the app.
+- Chat: `ToolbarOverflowMenu` for model settings / persona / system prompt / share,
+  `toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)`, `swipeActionsContainer()` so the
+  message rows' `swipeActions` (copy, edit, regenerate) work outside a `List`, and
+  `onScrollGeometryChange` to follow a streaming reply only while you are at the bottom.
+- List: new-chat button at `.topBarPinnedTrailing`; delete asks first via `confirmationDialog(_:item:)`.
+- The SDK 27.0 name is `toolbarMinimizationBehavior` / `ToolbarMinimizationBehavior`; the bundled
+  swiftui-whats-new-27 skill says `toolbarMinimizeBehavior`, which does not compile.
+- Never confirm inside `.onDelete`: List removes the row at once and SwiftUI throws
+  `NSInternalInconsistencyException` (invalid number of items) when the data is still there. Use a
+  per-row `swipeActions` button without the destructive role, then delete.
 
 ## API facts verified on 2026-10-01
 - `GET /api/tags` is public: it returns 200 even with an invalid key, so the key is verified with a
@@ -62,6 +81,14 @@ UI strings are Turkish.
   `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier app.bulut.ollama
   --source "Library/Application Support"` (fails with CoreDeviceError 4016 while the phone is locked).
 - NOT yet verified: the title language fix (needs typed input).
+- iOS 27 hardening (branch `feature/ios27-hardening`): 24 tests pass in the iOS 27 simulator. Builds
+  clean (0 Swift warnings) in Debug with `SWIFT_STRICT_CONCURRENCY=complete`, in Release, and with
+  `SWIFT_VERSION=6` (the target still uses Swift 5 mode). The overflow menu, minimizing bar, message
+  swipe actions and delete confirmation were checked by hand in the simulator. `AppModel.verify(key:)`
+  uses the injected server too (a test caught it reaching ollama.com). Before the fixes, tests showed a stop before the first token and an
+  empty server reply both left an invisible reply, and `stopAll` did not cancel a title request.
+  Deleting a conversation mid-stream did NOT crash (simulator, in-memory store); the new
+  `ChatEngine.delete` waits for the reply and title tasks before deleting anyway.
 
 ## Simulator testing notes
 - The simulator pasteboard stays empty (`simctl pbcopy` and the panel's text action both fail), so text
@@ -73,6 +100,10 @@ UI strings are Turkish.
 
 ## Next
 Phase 3: App Intent / Shortcuts, share extension, Markdown/JSON export.
-Open ideas: a visible "stopped" label on interrupted replies, smaller JPEGs (a detailed 1536 px photo
-is ~840 KB and is resent with every turn), strip Markdown in the conversation list preview, the
-code-block edge fade kept in `stash@{0}` (based on Phase 1).
+Open ideas: smaller JPEGs (a detailed 1536 px photo is ~840 KB and is resent with every turn, and
+the history is base64-encoded on the main actor on every send), strip Markdown in the conversation
+list preview, the code-block edge fade kept in `stash@{0}` (based on Phase 1).
+Follow-ups: switch to Swift 6 mode after a device pass over photo attach and background expiry
+(it compiles clean; the runtime isolation checks are what is untested); profile streaming with the
+Instruments SwiftUI template before caching Markdown blocks or changing `MessageRow` closures;
+add a `VersionedSchema` before the first non-lightweight model change.
