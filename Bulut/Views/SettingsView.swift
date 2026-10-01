@@ -118,12 +118,8 @@ struct SettingsView: View {
     }
 
     private func deleteAllConversations() {
-        engine.stopAll()
         let all = (try? context.fetch(FetchDescriptor<Conversation>())) ?? []
-        for conversation in all {
-            context.delete(conversation)
-        }
-        try? context.save()
+        Task { await engine.delete(all, context: context) }
     }
 
     private static var versionString: String {

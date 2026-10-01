@@ -22,12 +22,20 @@ final class AppModel {
     /// `/api/show` results per model name, cached across launches.
     private(set) var modelDetails: [String: ModelDetails]
 
-    @ObservationIgnored private let defaults = UserDefaults.standard
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let baseURL: URL
     /// Models refreshed from the server during this launch; others are refreshed once on first use.
     @ObservationIgnored private var detailsRefreshed: Set<String> = []
 
-    init() {
-        apiKey = KeychainStore.readAPIKey()
+    convenience init() {
+        self.init(apiKey: KeychainStore.readAPIKey(), defaults: .standard)
+    }
+
+    /// Tests pass their own key, defaults suite and server instead of the Keychain and ollama.com.
+    init(apiKey: String?, defaults: UserDefaults, baseURL: URL = OllamaClient.baseURL) {
+        self.defaults = defaults
+        self.baseURL = baseURL
+        self.apiKey = apiKey
         modelNames = defaults.stringArray(forKey: DefaultsKey.cachedModels) ?? []
         defaultModel = defaults.string(forKey: DefaultsKey.defaultModel) ?? ""
         modelDetails = defaults.data(forKey: DefaultsKey.modelDetails)
@@ -37,7 +45,12 @@ final class AppModel {
     var hasAPIKey: Bool { apiKey != nil }
 
     var client: OllamaClient? {
-        apiKey.map { OllamaClient(apiKey: $0) }
+        apiKey.map { OllamaClient(apiKey: $0, baseURL: baseURL) }
+    }
+
+    /// The Settings toggle stored under `ChatEngine.autoTitleKey`; on by default.
+    var isAutoTitleEnabled: Bool {
+        defaults.object(forKey: ChatEngine.autoTitleKey) as? Bool ?? true
     }
 
     /// Last 4 characters of the key, for display in Settings.

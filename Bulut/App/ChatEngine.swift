@@ -9,11 +9,23 @@ import UIKit
 final class ChatEngine {
     private(set) var streamingConversationIDs: Set<UUID> = []
 
+    /// Why a reply ended before the model finished; decides what the reply shows afterwards.
+    private enum StopReason {
+        case user, deleted, backgroundExpired
+    }
+
+    /// Shown on a reply that ended without any text, so the row stays visible and can be regenerated.
+    static let stoppedNotice = "Yanıt durduruldu."
+    static let emptyReplyNotice = "Model boş bir yanıt döndürdü."
+    static let backgroundNotice = "Uygulama arka planda kaldığı için yanıt yarıda kesildi."
+
     @ObservationIgnored private let app: AppModel
     @ObservationIgnored private var tasks: [UUID: Task<Void, Never>] = [:]
-    @ObservationIgnored private var backgroundTasks: [UUID: UIBackgroundTaskIdentifier] = [:]
-    /// Title requests run after streaming ends, but stay cancellable through `stop` / `stopAll`.
+    /// Title requests run after streaming ends, but stay cancellable through `stop`, `stopAll` and `delete`.
     @ObservationIgnored private var titleTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var stopReasons: [UUID: StopReason] = [:]
+    @ObservationIgnored private var activeReplies: [UUID: (reply: ChatMessage, context: ModelContext)] = [:]
+    @ObservationIgnored private var backgroundTasks: [UUID: UIBackgroundTaskIdentifier] = [:]
 
     /// How often streamed text is written into SwiftData (keeps the UI smooth on long answers).
     private let flushInterval: TimeInterval = 0.05
@@ -73,13 +85,58 @@ final class ChatEngine {
     }
 
     func stop(_ conversation: Conversation) {
-        tasks[conversation.id]?.cancel()
+        cancel(conversation.id, reason: .user)
         titleTasks[conversation.id]?.cancel()
     }
 
     func stopAll() {
-        tasks.values.forEach { $0.cancel() }
+        for id in tasks.keys {
+            cancel(id, reason: .user)
+        }
         titleTasks.values.forEach { $0.cancel() }
+    }
+
+    /// Deletes conversations after their reply and title requests have stopped, so no request
+    /// writes into a model that is already gone.
+    func delete(_ conversations: [Conversation], context: ModelContext) async {
+        var running: [Task<Void, Never>] = []
+        for conversation in conversations {
+            let id = conversation.id
+            if let task = tasks[id] {
+                cancel(id, reason: .deleted)
+                running.append(task)
+            }
+            if let title = titleTasks[id] {
+                title.cancel()
+                running.append(title)
+            }
+        }
+        for task in running {
+            await task.value
+        }
+        for conversation in conversations {
+            context.delete(conversation)
+        }
+        try? context.save()
+    }
+
+    /// Called when iOS ends the extra background time. The reply is marked and saved right away,
+    /// because the app may be suspended (and later killed) before the cancelled task runs again.
+    func handleBackgroundExpiry(for id: UUID) {
+        if let active = activeReplies[id] {
+            active.reply.errorText = Self.backgroundNotice
+            try? active.context.save()
+        }
+        cancel(id, reason: .backgroundExpired)
+        endBackgroundTask(for: id)
+    }
+
+    private func cancel(_ id: UUID, reason: StopReason) {
+        guard let task = tasks[id] else { return }
+        if stopReasons[id] == nil {
+            stopReasons[id] = reason
+        }
+        task.cancel()
     }
 
     // MARK: Streaming
@@ -109,6 +166,7 @@ final class ChatEngine {
 
         let id = conversation.id
         streamingConversationIDs.insert(id)
+        activeReplies[id] = (reply, context)
         beginBackgroundTask(for: id)
 
         tasks[id] = Task { [weak self] in
@@ -116,11 +174,30 @@ final class ChatEngine {
                 client: client, model: modelName, history: history,
                 options: settings.options, think: settings.think, into: reply
             )
-            try? context.save()
-            self?.finish(id)
-            if !Task.isCancelled, reply.errorText == nil, !reply.content.isEmpty {
-                self?.startTitleIfNeeded(for: conversation, client: client, context: context)
-            }
+            self?.complete(id, reply: reply, conversation: conversation, client: client, context: context)
+        }
+    }
+
+    /// Runs on the main actor right after the stream ends, before anything else can touch the reply.
+    private func complete(
+        _ id: UUID,
+        reply: ChatMessage,
+        conversation: Conversation,
+        client: OllamaClient,
+        context: ModelContext
+    ) {
+        let reason = stopReasons.removeValue(forKey: id)
+        finish(id)
+        // `delete` removes the conversation as soon as this returns; leave it untouched.
+        guard reason != .deleted else { return }
+
+        if reply.errorText == nil, reply.content.isEmpty, reply.thinking.isEmpty {
+            reply.errorText = reason == nil ? Self.emptyReplyNotice : Self.stoppedNotice
+        }
+        try? context.save()
+
+        if reason == nil, reply.errorText == nil, !reply.content.isEmpty {
+            startTitleIfNeeded(for: conversation, client: client, context: context)
         }
     }
 
@@ -172,6 +249,7 @@ final class ChatEngine {
 
     private func finish(_ id: UUID) {
         tasks[id] = nil
+        activeReplies[id] = nil
         streamingConversationIDs.remove(id)
         endBackgroundTask(for: id)
     }
@@ -183,9 +261,8 @@ final class ChatEngine {
     /// Asks the same model for a short title after the first successful reply. Keeps the
     /// first-message title when the setting is off or the request fails.
     private func startTitleIfNeeded(for conversation: Conversation, client: OllamaClient, context: ModelContext) {
-        let enabled = UserDefaults.standard.object(forKey: Self.autoTitleKey) as? Bool ?? true
         let id = conversation.id
-        guard enabled, !conversation.hasGeneratedTitle, titleTasks[id] == nil else { return }
+        guard app.isAutoTitleEnabled, !conversation.hasGeneratedTitle, titleTasks[id] == nil else { return }
         titleTasks[id] = Task { [weak self] in
             await self?.generateTitle(for: conversation, client: client, context: context)
             self?.titleTasks[id] = nil
@@ -234,7 +311,7 @@ final class ChatEngine {
         let identifier = UIApplication.shared.beginBackgroundTask(withName: "ollama-reply") { [weak self] in
             // The expiration handler is called on the main thread.
             MainActor.assumeIsolated {
-                self?.endBackgroundTask(for: id)
+                self?.handleBackgroundExpiry(for: id)
             }
         }
         backgroundTasks[id] = identifier
