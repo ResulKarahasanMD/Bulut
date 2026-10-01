@@ -16,6 +16,14 @@ final class Conversation {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
+    /// Request settings for this conversation; nil means the model's own default.
+    var temperature: Double?
+    var contextLength: Int?
+    /// `ThinkSetting.storedValue`; see `think`.
+    var thinkValue: String?
+    /// Set once the model has named the conversation, so the title is generated only once.
+    var hasGeneratedTitle: Bool = false
+
     // Optional + defaults keep the schema compatible with CloudKit sync later on.
     @Relationship(deleteRule: .cascade, inverse: \ChatMessage.conversation)
     var messages: [ChatMessage]? = []
@@ -52,20 +60,41 @@ final class Conversation {
     var lastMessagePreview: String {
         guard let last = sortedMessages.last else { return "Henüz mesaj yok" }
         if last.content.isEmpty, let error = last.errorText { return error }
+        if last.content.isEmpty, last.hasImages { return "Görsel" }
         return last.content
             .replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespaces)
     }
 
+    var think: ThinkSetting? {
+        get { thinkValue.map(ThinkSetting.init(storedValue:)) }
+        set { thinkValue = newValue?.storedValue }
+    }
+
+    /// Options and `think` for a request to a model with the given details. Values the model does
+    /// not accept (e.g. after switching models) are dropped instead of being sent.
+    func requestSettings(for details: ModelDetails?) -> (options: OllamaChatOptions?, think: ThinkSetting?) {
+        var numCtx = contextLength
+        if let requested = numCtx, let limit = details?.contextLength {
+            numCtx = min(requested, limit)
+        }
+        let options = (temperature == nil && numCtx == nil) ? nil : OllamaChatOptions(temperature: temperature, numCtx: numCtx)
+        let accepted = think.flatMap { value in details?.thinkOptions.contains(value) == true ? value : nil }
+        return (options, accepted)
+    }
+
     /// The history sent to the model: optional system prompt + every non-error message with content.
-    func requestMessages() -> [OllamaChatMessage] {
+    /// Images are only included for vision models; image-only messages are skipped otherwise.
+    func requestMessages(includeImages: Bool = true) -> [OllamaChatMessage] {
         var result: [OllamaChatMessage] = []
         let system = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !system.isEmpty {
             result.append(OllamaChatMessage(role: ChatRole.system.rawValue, content: system))
         }
-        for message in sortedMessages where message.errorText == nil && !message.content.isEmpty {
-            result.append(OllamaChatMessage(role: message.roleRaw, content: message.content))
+        for message in sortedMessages where message.errorText == nil {
+            let images = includeImages ? message.sortedImages.map { $0.data.base64EncodedString() } : []
+            guard !message.content.isEmpty || !images.isEmpty else { continue }
+            result.append(OllamaChatMessage(role: message.roleRaw, content: message.content, images: images.isEmpty ? nil : images))
         }
         return result
     }
@@ -73,10 +102,15 @@ final class Conversation {
     /// Markdown transcript used for sharing.
     func transcript() -> String {
         var lines = ["# \(displayTitle)", ""]
-        for message in sortedMessages where !message.content.isEmpty {
+        for message in sortedMessages where !message.content.isEmpty || message.hasImages {
             let speaker = message.role == .user ? "Sen" : (message.modelName ?? modelName)
             lines.append("**\(speaker):**")
-            lines.append(message.content)
+            if message.hasImages {
+                lines.append("_[\(message.images?.count ?? 0) görsel]_")
+            }
+            if !message.content.isEmpty {
+                lines.append(message.content)
+            }
             lines.append("")
         }
         return lines.joined(separator: "\n")
@@ -96,6 +130,9 @@ final class ChatMessage {
     var errorText: String?
     var conversation: Conversation?
 
+    @Relationship(deleteRule: .cascade, inverse: \MessageImage.message)
+    var images: [MessageImage]? = []
+
     init(role: ChatRole, content: String, modelName: String? = nil) {
         self.id = UUID()
         self.roleRaw = role.rawValue
@@ -107,5 +144,37 @@ final class ChatMessage {
 
     var role: ChatRole {
         ChatRole(rawValue: roleRaw) ?? .user
+    }
+
+    var sortedImages: [MessageImage] {
+        (images ?? []).sorted { $0.index < $1.index }
+    }
+
+    var hasImages: Bool {
+        !(images ?? []).isEmpty
+    }
+
+    func attach(_ image: MessageImage) {
+        if images == nil { images = [] }
+        images?.append(image)
+    }
+}
+
+/// A photo sent with a user message. Both JPEGs live outside the SQLite file.
+@Model
+final class MessageImage {
+    var id: UUID = UUID()
+    var index: Int = 0
+    /// Downscaled JPEG sent to the model.
+    @Attribute(.externalStorage) var data: Data = Data()
+    /// Small JPEG shown in the chat bubble.
+    @Attribute(.externalStorage) var thumbnail: Data = Data()
+    var message: ChatMessage?
+
+    init(index: Int, data: Data, thumbnail: Data) {
+        self.id = UUID()
+        self.index = index
+        self.data = data
+        self.thumbnail = thumbnail
     }
 }

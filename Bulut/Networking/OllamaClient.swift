@@ -28,6 +28,24 @@ struct OllamaClient: Sendable {
         return decoded.models.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    /// Capabilities, accepted `think` values and context length of one model (`POST /api/show`).
+    func showModel(_ name: String) async throws -> ModelDetails {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/show"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        request.httpBody = try JSONEncoder().encode(["model": name])
+
+        let (data, response) = try await session.data(for: request)
+        try Self.validate(response, body: data)
+        return try Self.decodeShow(data)
+    }
+
+    static func decodeShow(_ data: Data) throws -> ModelDetails {
+        ModelDetails(try OllamaCoding.makeDecoder().decode(OllamaShowResponse.self, from: data))
+    }
+
     // MARK: Key check
 
     /// `/api/tags` is public, so the only reliable way to check a key is an authenticated call.
@@ -45,15 +63,34 @@ struct OllamaClient: Sendable {
         try Self.validate(response, body: data)
     }
 
+    // MARK: Chat (single reply)
+
+    /// One non-streaming reply, for short side requests such as a conversation title.
+    func complete(
+        model: String,
+        messages: [OllamaChatMessage],
+        options: OllamaChatOptions? = nil,
+        think: ThinkSetting? = nil
+    ) async throws -> String {
+        let body = OllamaChatRequest(model: model, messages: messages, stream: false, options: options, think: think)
+        let request = try makeChatRequest(body)
+        let (data, response) = try await session.data(for: request)
+        try Self.validate(response, body: data)
+        let chunk = try OllamaCoding.makeDecoder().decode(OllamaChatChunk.self, from: data)
+        if let message = chunk.error { throw OllamaError.server(message) }
+        return chunk.message?.content ?? ""
+    }
+
     // MARK: Chat (streaming)
 
     /// Streams `/api/chat` as NDJSON chunks. Cancelling the consuming task cancels the HTTP request.
     func streamChat(
         model: String,
         messages: [OllamaChatMessage],
-        options: OllamaChatOptions? = nil
+        options: OllamaChatOptions? = nil,
+        think: ThinkSetting? = nil
     ) -> AsyncThrowingStream<OllamaChatChunk, Error> {
-        let body = OllamaChatRequest(model: model, messages: messages, stream: true, options: options)
+        let body = OllamaChatRequest(model: model, messages: messages, stream: true, options: options, think: think)
         let session = self.session
 
         return AsyncThrowingStream { continuation in
@@ -104,7 +141,7 @@ struct OllamaClient: Sendable {
         return chunk
     }
 
-    private func makeChatRequest(_ body: OllamaChatRequest) throws -> URLRequest {
+    func makeChatRequest(_ body: OllamaChatRequest) throws -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent("api/chat"))
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")

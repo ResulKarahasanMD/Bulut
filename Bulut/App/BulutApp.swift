@@ -18,12 +18,13 @@ struct BulutApp: App {
                 .environment(app)
                 .environment(engine)
         }
-        .modelContainer(for: [Conversation.self, ChatMessage.self])
+        .modelContainer(for: [Conversation.self, ChatMessage.self, MessageImage.self, Persona.self])
     }
 }
 
 struct RootView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         Group {
@@ -34,5 +35,8 @@ struct RootView: View {
             }
         }
         .animation(.default, value: app.hasAPIKey)
+        .task {
+            PersonaSeeder.seedIfNeeded(context)
+        }
     }
 }

@@ -6,8 +6,10 @@ struct MessageRow: View {
     let isStreaming: Bool
     let isLast: Bool
     var onRegenerate: () -> Void = {}
+    var onEdit: () -> Void = {}
 
     @State private var isSelectingText = false
+    @State private var openedImage: MessageImage?
 
     var body: some View {
         Group {
@@ -21,6 +23,9 @@ struct MessageRow: View {
         .sheet(isPresented: $isSelectingText) {
             SelectableTextSheet(text: message.content)
         }
+        .sheet(item: $openedImage) { image in
+            ImageViewerSheet(data: image.data)
+        }
     }
 
     // MARK: User
@@ -28,16 +33,38 @@ struct MessageRow: View {
     private var userBubble: some View {
         HStack {
             Spacer(minLength: 48)
-            Text(message.content)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .foregroundStyle(.white)
-                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .contextMenu {
-                    copyButton
-                    selectTextButton
-                    ShareLink(item: message.content)
+            VStack(alignment: .trailing, spacing: 6) {
+                if message.hasImages {
+                    HStack(spacing: 6) {
+                        ForEach(message.sortedImages) { image in
+                            Button {
+                                openedImage = image
+                            } label: {
+                                ThumbnailView(data: image.thumbnail, side: 96)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Görseli aç")
+                        }
+                    }
                 }
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .foregroundStyle(.white)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .contextMenu {
+                            copyButton
+                            selectTextButton
+                            ShareLink(item: message.content)
+                            if !isStreaming {
+                                Button(action: onEdit) {
+                                    Label("Düzenle ve yeniden gönder", systemImage: "pencil")
+                                }
+                            }
+                        }
+                }
+            }
         }
     }
 
@@ -191,5 +218,37 @@ struct TypingIndicator: View {
     private func dotOpacity(_ index: Int) -> Double {
         let base = 0.25 + 0.75 * phase
         return index == 1 ? 1.25 - base : base
+    }
+}
+
+/// Full-size view of a sent photo, with a share button.
+struct ImageViewerSheet: View {
+    let data: Data
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .toolbar {
+                            ToolbarItem(placement: .primaryAction) {
+                                ShareLink(item: Image(uiImage: image), preview: SharePreview("Görsel", image: Image(uiImage: image)))
+                            }
+                        }
+                } else {
+                    ContentUnavailableView("Görsel açılamadı", systemImage: "photo")
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Kapat") { dismiss() }
+                }
+            }
+        }
     }
 }
