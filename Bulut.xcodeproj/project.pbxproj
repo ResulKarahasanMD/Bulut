@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		B0B0B0B0B0B0B0B000000015 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B0B0B0B0B0B0B0B00000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B0B0B0B0B0B0B0B000000006;
+			remoteInfo = Bulut;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		B0B0B0B0B0B0B0B000000001 /* Bulut.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bulut.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0B0B0B0B0B0B0B000000010 /* BulutTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BulutTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = Bulut;
 			sourceTree = "<group>";
 		};
+		B0B0B0B0B0B0B0B000000011 /* BulutTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BulutTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		B0B0B0B0B0B0B0B000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0B0B0B0B0B0B0B000000012 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				B0B0B0B0B0B0B0B000000002 /* Bulut */,
+				B0B0B0B0B0B0B0B000000011 /* BulutTests */,
 				B0B0B0B0B0B0B0B000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				B0B0B0B0B0B0B0B000000001 /* Bulut.app */,
+				B0B0B0B0B0B0B0B000000010 /* BulutTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = B0B0B0B0B0B0B0B000000001 /* Bulut.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B0B0B0B0B0B0B0B000000017 /* BulutTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B0B0B0B0B0B0B0B000000018 /* Build configuration list for PBXNativeTarget "BulutTests" */;
+			buildPhases = (
+				B0B0B0B0B0B0B0B000000013 /* Sources */,
+				B0B0B0B0B0B0B0B000000012 /* Frameworks */,
+				B0B0B0B0B0B0B0B000000014 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B0B0B0B0B0B0B0B000000016 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B0B0B0B0B0B0B0B000000011 /* BulutTests */,
+			);
+			name = BulutTests;
+			packageProductDependencies = (
+			);
+			productName = BulutTests;
+			productReference = B0B0B0B0B0B0B0B000000010 /* BulutTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					B0B0B0B0B0B0B0B000000006 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					B0B0B0B0B0B0B0B000000017 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = B0B0B0B0B0B0B0B000000006;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				B0B0B0B0B0B0B0B000000006 /* Bulut */,
+				B0B0B0B0B0B0B0B000000017 /* BulutTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		B0B0B0B0B0B0B0B000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0B0B0B0B0B0B0B000000014 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B0B0B0B0B0B0B0B000000013 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B0B0B0B0B0B0B0B000000016 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B0B0B0B0B0B0B0B000000006 /* Bulut */;
+			targetProxy = B0B0B0B0B0B0B0B000000015 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		B0B0B0B0B0B0B0B00000000C /* Debug */ = {
@@ -304,6 +379,42 @@
 			};
 			name = Release;
 		};
+		B0B0B0B0B0B0B0B000000019 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3V5WCZ8D9T;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.bulut.ollama.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Bulut.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bulut";
+			};
+			name = Debug;
+		};
+		B0B0B0B0B0B0B0B00000001A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3V5WCZ8D9T;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.bulut.ollama.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Bulut.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Bulut";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -312,6 +423,15 @@
 			buildConfigurations = (
 				B0B0B0B0B0B0B0B00000000E /* Debug */,
 				B0B0B0B0B0B0B0B00000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B0B0B0B0B0B0B0B000000018 /* Build configuration list for PBXNativeTarget "BulutTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0B0B0B0B0B0B0B000000019 /* Debug */,
+				B0B0B0B0B0B0B0B00000001A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
