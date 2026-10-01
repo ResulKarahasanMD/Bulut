@@ -48,21 +48,21 @@ struct ChatView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomID)
-                        // iOS 17 fallback for `BottomTracking`, which measures the geometry on iOS 18+.
-                        .onAppear {
-                            if #unavailable(iOS 18) { isAtBottom = true }
-                        }
-                        .onDisappear {
-                            if #unavailable(iOS 18) { isAtBottom = false }
-                        }
                 }
                 .padding(.horizontal)
                 .padding(.top, 12)
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
-            .modifier(BottomTracking(isAtBottom: $isAtBottom))
-            .modifier(MessageScrollFeatures())
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.visibleRect.maxY >= geometry.contentSize.height - 60
+            } action: { _, atBottom in
+                isAtBottom = atBottom
+            }
+            // The bar shrinks while you scroll down to read.
+            .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
+            // Lets MessageRow's swipe actions work outside a List.
+            .swipeActionsContainer()
             .onChange(of: messages.count) {
                 // A new message (yours or the start of a reply) always brings you down.
                 withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
@@ -88,11 +88,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) { modelMenu }
-            if #available(iOS 27, *) {
-                ToolbarOverflowMenu { moreMenuItems }
-            } else {
-                ToolbarItem(placement: .topBarTrailing) { moreMenu }
-            }
+            ToolbarOverflowMenu { moreMenuItems }
         }
         .sheet(isPresented: $isEditingSystemPrompt) {
             SystemPromptSheet(prompt: $conversation.systemPrompt)
@@ -178,16 +174,7 @@ struct ChatView: View {
         .disabled(isStreaming)
     }
 
-    /// Before iOS 27 the same items live in an explicit "…" menu.
-    private var moreMenu: some View {
-        Menu {
-            moreMenuItems
-        } label: {
-            Image(systemName: "ellipsis.circle")
-        }
-        .accessibilityLabel("Diğer")
-    }
-
+    /// Lives in the system overflow menu (`ToolbarOverflowMenu`).
     @ViewBuilder
     private var moreMenuItems: some View {
         Button {
@@ -243,38 +230,6 @@ struct ChatView: View {
         draft = ""
         pendingImages = []
         engine.send(text, images: images, in: conversation, context: context)
-    }
-}
-
-/// Keeps `isAtBottom` current from the scroll geometry on iOS 18+. On iOS 17 the bottom marker's
-/// appear and disappear do the same job (see `ChatView`).
-private struct BottomTracking: ViewModifier {
-    @Binding var isAtBottom: Bool
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18, *) {
-            content.onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.visibleRect.maxY >= geometry.contentSize.height - 60
-            } action: { _, atBottom in
-                isAtBottom = atBottom
-            }
-        } else {
-            content
-        }
-    }
-}
-
-/// iOS 27 only: the navigation bar shrinks while you scroll down to read, and message rows can be
-/// swiped for their actions (`MessageRow` declares them; they have no effect before iOS 27).
-private struct MessageScrollFeatures: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 27, *) {
-            content
-                .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
-                .swipeActionsContainer()
-        } else {
-            content
-        }
     }
 }
 

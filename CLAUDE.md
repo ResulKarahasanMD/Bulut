@@ -1,6 +1,6 @@
 # Bulut — personal iOS client for Ollama Cloud
 
-SwiftUI + SwiftData iOS app (iOS 17+, Swift 5 language mode) that talks **directly** to Ollama Cloud
+SwiftUI + SwiftData iOS app (iOS 27.0+, Swift 5 language mode) that talks **directly** to Ollama Cloud
 (`https://ollama.com/api`) with the user's API key. Cloud models only, no local Ollama, no backend.
 UI strings are Turkish.
 
@@ -33,12 +33,14 @@ UI strings are Turkish.
   `URLSession.shared`; `AppModel(apiKey:defaults:baseURL:)` points the app at it. Run:
   `xcodebuild test -project Bulut.xcodeproj -scheme Bulut -destination 'platform=iOS Simulator,name=Bulut iPhone 17 Pro Max'`.
 
-## iOS 27 (deployment target stays iOS 17; every SDK 27 API is behind `#available`)
-- Chat: `ToolbarOverflowMenu` for model settings / persona / system prompt / share (older: "…" menu),
+## iOS 27 (deployment target 27.0, so no `#available` gates)
+- 27.0, not 27.0.1: the only simulator runtime here is iOS 27.0 (24A434) and the SDK allows up to
+  27.0.99; the iPhone runs 27.0.1. The iPad Pro (iOS 26.6) can no longer install the app.
+- Chat: `ToolbarOverflowMenu` for model settings / persona / system prompt / share,
   `toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)`, `swipeActionsContainer()` so the
-  message rows' `swipeActions` (copy, edit, regenerate) work outside a `List`.
-- List: new-chat button at `.topBarPinnedTrailing`; delete asks first via `confirmationDialog(_:item:)`
-  (older: `isPresented:` + `presenting:`).
+  message rows' `swipeActions` (copy, edit, regenerate) work outside a `List`, and
+  `onScrollGeometryChange` to follow a streaming reply only while you are at the bottom.
+- List: new-chat button at `.topBarPinnedTrailing`; delete asks first via `confirmationDialog(_:item:)`.
 - The SDK 27.0 name is `toolbarMinimizationBehavior` / `ToolbarMinimizationBehavior`; the bundled
   swiftui-whats-new-27 skill says `toolbarMinimizeBehavior`, which does not compile.
 - Never confirm inside `.onDelete`: List removes the row at once and SwiftUI throws
@@ -79,11 +81,11 @@ UI strings are Turkish.
   `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier app.bulut.ollama
   --source "Library/Application Support"` (fails with CoreDeviceError 4016 while the phone is locked).
 - NOT yet verified: the title language fix (needs typed input).
-- iOS 27 hardening (branch `feature/ios27-hardening`): 23 tests pass in the iOS 27 simulator. Builds
+- iOS 27 hardening (branch `feature/ios27-hardening`): 24 tests pass in the iOS 27 simulator. Builds
   clean (0 Swift warnings) in Debug with `SWIFT_STRICT_CONCURRENCY=complete`, in Release, and with
   `SWIFT_VERSION=6` (the target still uses Swift 5 mode). The overflow menu, minimizing bar, message
-  swipe actions and delete confirmation were checked by hand in the simulator; the pre-27 fallbacks
-  are only compile-checked. Before the fixes, tests showed a stop before the first token and an
+  swipe actions and delete confirmation were checked by hand in the simulator. `AppModel.verify(key:)`
+  uses the injected server too (a test caught it reaching ollama.com). Before the fixes, tests showed a stop before the first token and an
   empty server reply both left an invisible reply, and `stopAll` did not cancel a title request.
   Deleting a conversation mid-stream did NOT crash (simulator, in-memory store); the new
   `ChatEngine.delete` waits for the reply and title tasks before deleting anyway.

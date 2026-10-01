@@ -13,9 +13,8 @@ struct ConversationListView: View {
     @State private var path: [Conversation] = []
     @State private var searchText = ""
     @State private var isShowingSettings = false
+    /// Non-nil while the delete confirmation is shown.
     @State private var conversationToDelete: Conversation?
-    /// Drives the pre-iOS 27 dialog; iOS 27 presents from `conversationToDelete` alone.
-    @State private var isConfirmingDelete = false
 
     private var filtered: [Conversation] {
         let query = searchText.trimmingCharacters(in: .whitespaces)
@@ -50,12 +49,11 @@ struct ConversationListView: View {
                 }
             }
             .listStyle(.plain)
-            .modifier(DeleteConversationConfirmation(
-                item: $conversationToDelete,
-                isPresented: $isConfirmingDelete,
-                isStreaming: { engine.isStreaming($0) },
-                onDelete: delete
-            ))
+            .confirmationDialog("Sohbet silinsin mi?", item: $conversationToDelete, titleVisibility: .visible) { conversation in
+                Button("Sil", role: .destructive) { delete(conversation) }
+            } message: { conversation in
+                Text(deleteMessage(for: conversation))
+            }
             .overlay {
                 if conversations.isEmpty {
                     ContentUnavailableView {
@@ -84,12 +82,8 @@ struct ConversationListView: View {
                     }
                     .accessibilityLabel("Ayarlar")
                 }
-                if #available(iOS 27, *) {
-                    // Never moves into the overflow menu, however narrow the bar gets.
-                    ToolbarItem(placement: .topBarPinnedTrailing) { newConversationMenu }
-                } else {
-                    ToolbarItem(placement: .topBarTrailing) { newConversationMenu }
-                }
+                // Never moves into the overflow menu, however narrow the bar gets.
+                ToolbarItem(placement: .topBarPinnedTrailing) { newConversationMenu }
             }
             .sheet(isPresented: $isShowingSettings) {
                 SettingsView()
@@ -137,7 +131,11 @@ struct ConversationListView: View {
     /// Swipe to delete asks first; a whole conversation cannot be brought back.
     private func confirmDelete(_ conversation: Conversation) {
         conversationToDelete = conversation
-        isConfirmingDelete = true
+    }
+
+    private func deleteMessage(for conversation: Conversation) -> String {
+        let base = "“\(conversation.displayTitle)” ve tüm mesajları silinecek."
+        return engine.isStreaming(conversation) ? base + " Süren yanıt durdurulacak." : base
     }
 
     private func delete(_ conversation: Conversation) {
@@ -182,45 +180,6 @@ struct ConversationRow: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
-    }
-}
-
-/// Asks before a conversation is deleted. iOS 27 presents straight from the optional item;
-/// older systems need the separate Bool plus `presenting:`.
-private struct DeleteConversationConfirmation: ViewModifier {
-    @Binding var item: Conversation?
-    @Binding var isPresented: Bool
-    let isStreaming: (Conversation) -> Bool
-    let onDelete: (Conversation) -> Void
-
-    func body(content: Content) -> some View {
-        if #available(iOS 27, *) {
-            content.confirmationDialog("Sohbet silinsin mi?", item: $item, titleVisibility: .visible) { conversation in
-                deleteButton(for: conversation)
-            } message: { conversation in
-                Text(message(for: conversation))
-            }
-        } else {
-            content.confirmationDialog(
-                "Sohbet silinsin mi?",
-                isPresented: $isPresented,
-                titleVisibility: .visible,
-                presenting: item
-            ) { conversation in
-                deleteButton(for: conversation)
-            } message: { conversation in
-                Text(message(for: conversation))
-            }
-        }
-    }
-
-    private func deleteButton(for conversation: Conversation) -> some View {
-        Button("Sil", role: .destructive) { onDelete(conversation) }
-    }
-
-    private func message(for conversation: Conversation) -> String {
-        let base = "“\(conversation.displayTitle)” ve tüm mesajları silinecek."
-        return isStreaming(conversation) ? base + " Süren yanıt durdurulacak." : base
     }
 }
 

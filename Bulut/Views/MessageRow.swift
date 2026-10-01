@@ -22,8 +22,7 @@ struct MessageRow: View {
                 assistantBody
             }
         }
-        // Effective on iOS 27, where ChatView marks the list as a swipe-actions container.
-        // The same actions stay in the context menu for older systems.
+        // ChatView marks the list as a swipe-actions container; the context menu offers the same actions.
         .swipeActions(edge: .leading) {
             if !message.content.isEmpty {
                 Button {
