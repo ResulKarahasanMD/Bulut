@@ -102,7 +102,8 @@ struct MessageRow: View {
                 errorBox(error)
             }
 
-            if !isStreaming && (!message.content.isEmpty || message.errorText != nil) {
+            // Also after a stop during thinking, so the reply can be regenerated without a long press.
+            if !isStreaming && (!message.content.isEmpty || message.errorText != nil || !message.thinking.isEmpty) {
                 footer
             }
         }

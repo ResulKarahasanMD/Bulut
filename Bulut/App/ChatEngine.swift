@@ -201,7 +201,7 @@ final class ChatEngine {
         let model = conversation.modelName
         let questionText = question.content.isEmpty ? "(görsel gönderdi)" : String(question.content.prefix(1500))
         let prompt = """
-        Aşağıdaki sohbet için en fazla 6 kelimelik kısa bir başlık yaz. Başlık sohbetin dilinde olsun. \
+        Aşağıdaki sohbet için en fazla 6 kelimelik kısa bir başlık yaz. Başlığı kullanıcının yazdığı dilde yaz. \
         Yalnızca başlığı yaz; tırnak, emoji, Markdown ve sonda nokta kullanma.
 
         Kullanıcı: \(questionText)
