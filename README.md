@@ -1,5 +1,8 @@
 # Bulut
 
+> **English summary.** A personal iOS chat client for Ollama Cloud models (SwiftUI, SwiftData, iOS 27+): streaming replies with stop and regenerate, collapsible thinking sections, Markdown rendering, per-chat system prompts. The API key is kept in the Keychain.
+> The rest of this README is in Turkish.
+
 Ollama Cloud modelleriyle konuşmak için kişisel iOS uygulaması (SwiftUI, iOS 27+).
 
 ## Kurulum
@@ -15,3 +18,7 @@ Ollama Cloud modelleriyle konuşmak için kişisel iOS uygulaması (SwiftUI, iOS
 - Markdown desteklenir: başlık, liste, tablo, alıntı ve kopyalanabilir kod blokları.
 - Sohbet başına sistem talimatı ve varsayılan sistem talimatı tanımlanabilir.
 - Sohbetler SwiftData'da tutulur. Arama, silme ve paylaşma yapılabilir.
+
+## Lisans
+
+[MIT](LICENSE). Bu proje Ollama ile bağlantılı değildir.
